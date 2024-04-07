@@ -123,7 +123,7 @@ namespace Metasound
 
 					InputInterface.Add(TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(OutputCeilingDb), 0.0f));
 					InputInterface.Add(TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputThresholdDb), 0.0f));
-					InputInterface.Add(TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputReleaseTime), 0.1f));
+					InputInterface.Add(TInputDataVertex<FTime>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputReleaseTime), 0.1f));
 					InputInterface.Add(TInputDataVertex<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard));
 
 
@@ -177,8 +177,6 @@ namespace Metasound
 			{
 				InOutVertexData.BindReadVertex(GetAudioInputName(Chan), Inputs[Chan]);
 			}
-
-				//InOutVertexData.BindReadVertex(GainInputNames[i], Gains[i]);
 		
 		}
 
@@ -191,7 +189,6 @@ namespace Metasound
 				InOutVertexData.BindReadVertex(AudioOutputNames[i], Outputs[i]);
 			}
 
-			//InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(OutputAudio), AudioOutput);
 		}
 
 

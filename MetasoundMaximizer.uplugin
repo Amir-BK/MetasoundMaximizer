@@ -18,7 +18,7 @@
 		{
 			"Name": "TKMaximizer",
 			"Type": "Runtime",
-			"LoadingPhase": "EarliestPossible"
+			"LoadingPhase": "PreLoadingScreen"
 		},
 	],
 	"Plugins": [
