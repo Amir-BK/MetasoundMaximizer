@@ -5,7 +5,7 @@
 	"FriendlyName": "MetasoundMaximizer",
 	"Description": "A plugin that provides a maximizer/limiter node for metasounds, perhaps some other nodes",
 	"Category": "Audio",
-	"CreatedBy": "Ishay Tubi & Amir Ben-Kiki",
+	"CreatedBy": "NeuroVision & Amir Ben-Kiki",
 	"CreatedByURL": "",
 	"DocsURL": "",
 	"MarketplaceURL": "",
@@ -18,7 +18,7 @@
 		{
 			"Name": "TKMaximizer",
 			"Type": "Runtime",
-			"LoadingPhase": "PreDefault"
+			"LoadingPhase": "EarliestPossible"
 		},
 	],
 	"Plugins": [

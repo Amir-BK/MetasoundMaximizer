@@ -40,9 +40,9 @@ namespace Metasound
 	};
 
 	DECLARE_METASOUND_ENUM(EMaximizerKneeMode, EMaximizerKneeMode::Hard, TKMAXIMIZER_API,
-	FEnumMaximizerKneeMode, FEnumMaximizerKneeModeInfo, FKneeModeReadRef, FEnumMaximizerKneeModeWriteRef);
+	FEnumMaximizerKneeMode, FEnumMaximizerKneeModeInfo, FMaximizerKneeModeReadRef, FEnumMaximizerKneeModeWriteRef);
 
-	DEFINE_METASOUND_ENUM_BEGIN(EMaximizerKneeMode, FEnumMaximizerKneeMode, "KneeMode")
+	DEFINE_METASOUND_ENUM_BEGIN(EMaximizerKneeMode, FEnumMaximizerKneeMode, "MaximizerKneeMode")
 		DEFINE_METASOUND_ENUM_ENTRY(EMaximizerKneeMode::Hard, "KneeModeHardDescription", "Hard", "KneeModeHardDescriptionTT", "Only audio strictly above the threshold is affected by the limiter."),
 		DEFINE_METASOUND_ENUM_ENTRY(EMaximizerKneeMode::Soft, "KneeModeSoftDescription", "Soft", "KneeModeSoftDescriptionTT", "Limiter activates more smoothly near the threshold."),
 		DEFINE_METASOUND_ENUM_END()
@@ -62,7 +62,7 @@ namespace Metasound
 			const FFloatReadRef& InGainDb,
 			const FFloatReadRef& InThresholdDb,
 			const FTimeReadRef& InReleaseTime,
-			const FKneeModeReadRef& InKneeMode)
+			const FMaximizerKneeModeReadRef& InKneeMode)
 			: Inputs(InInputBuffers)
 			, InOutputCeilingDb(InGainDb)
 			, ThresholdDbInput(InThresholdDb)
@@ -186,24 +186,14 @@ namespace Metasound
 		{
 			using namespace MaximizerVertexNames;
 
+			for (uint32 i = 0; i < NumChannels; ++i)
+			{
+				InOutVertexData.BindReadVertex(AudioOutputNames[i], Outputs[i]);
+			}
+
 			//InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(OutputAudio), AudioOutput);
 		}
 
-		virtual FDataReferenceCollection GetInputs() const override
-		{
-			// This should never be called. Bind(...) is called instead. This method
-			// exists as a stop-gap until the API can be deprecated and removed.
-			checkNoEntry();
-			return {};
-		}
-
-		virtual FDataReferenceCollection GetOutputs() const override
-		{
-			// This should never be called. Bind(...) is called instead. This method
-			// exists as a stop-gap until the API can be deprecated and removed.
-			checkNoEntry();
-			return {};
-		}
 
 		static TUniquePtr<IOperator> CreateOperator(const FBuildOperatorParams& InParams, FBuildResults& OutResults)
 		{
@@ -212,17 +202,20 @@ namespace Metasound
 			const FInputVertexInterfaceData& InputData = InParams.InputData;
 
 			TArray<FAudioBufferReadRef> InputBuffers;
-			TArray<FFloatReadRef> InputGains;
-			
+
+			for (uint32 Chan = 0; Chan < NumChannels; ++Chan)
+			{
+				InputBuffers.Add(InputData.GetOrConstructDataReadReference<FAudioBuffer>(GetAudioInputName(Chan), InParams.OperatorSettings));
+			}
+					
 			//const FInputVertexInterfaceData& InputData = InParams.InputData;
 
-			FAudioBufferReadRef AudioIn = InputData.GetOrConstructDataReadReference<FAudioBuffer>(METASOUND_GET_PARAM_NAME(InputAudio), InParams.OperatorSettings);
-			FFloatReadRef InGainDbIn = InputData.GetOrCreateDefaultDataReadReference<float>(METASOUND_GET_PARAM_NAME(OutputCeilingDb), InParams.OperatorSettings);
+			FFloatReadRef InOutCeileingDb = InputData.GetOrCreateDefaultDataReadReference<float>(METASOUND_GET_PARAM_NAME(OutputCeilingDb), InParams.OperatorSettings);
 			FFloatReadRef ThresholdDbIn = InputData.GetOrCreateDefaultDataReadReference<float>(METASOUND_GET_PARAM_NAME(InputThresholdDb), InParams.OperatorSettings);
 			FTimeReadRef ReleaseTimeIn = InputData.GetOrCreateDefaultDataReadReference<FTime>(METASOUND_GET_PARAM_NAME(InputReleaseTime), InParams.OperatorSettings);
-			FKneeModeReadRef KneeModeIn = InputData.GetOrCreateDefaultDataReadReference<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME(InputKneeMode), InParams.OperatorSettings);
+			FMaximizerKneeModeReadRef KneeModeIn = InputData.GetOrCreateDefaultDataReadReference<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME(InputKneeMode), InParams.OperatorSettings);
 
-			return MakeUnique<TMaximizerOperator<NumChannels>>(InParams, MoveTemp(InputBuffers), InGainDbIn, ThresholdDbIn, ReleaseTimeIn, KneeModeIn);
+			return MakeUnique<TMaximizerOperator<NumChannels>>(InParams, MoveTemp(InputBuffers), InOutCeileingDb, ThresholdDbIn, ReleaseTimeIn, KneeModeIn);
 		}
 
 		void Reset(const IOperator::FResetParams& InParams)
@@ -232,7 +225,7 @@ namespace Metasound
 			const float ClampedInGainDb = FMath::Min(*InOutputCeilingDb, MaxInputGain);
 			const float ClampedReleaseTime = FMath::Max(FTime::ToMilliseconds(*ReleaseTimeInput), 0.0);
 
-			Limiter.Init(InParams.OperatorSettings.GetSampleRate(), 1);
+			Limiter.Init(InParams.OperatorSettings.GetSampleRate(), NumChannels);
 			Limiter.SetProcessingMode(Audio::EDynamicsProcessingMode::Limiter);
 			Limiter.SetInputGain(ClampedInGainDb);
 			Limiter.SetThreshold(*ThresholdDbInput);
@@ -259,6 +252,8 @@ namespace Metasound
 
 		void Execute()
 		{
+			
+			
 			/* Update parameters */
 			float ClampedInGainDb = FMath::Min(*InOutputCeilingDb, MaxInputGain);
 			if (!FMath::IsNearlyEqual(ClampedInGainDb, PrevInGainDb))
@@ -295,7 +290,13 @@ namespace Metasound
 				PrevKneeMode = *KneeModeInput;
 			}
 
-			//Limiter.ProcessAudio(AudioInput->GetData(), AudioInput->Num(), AudioOutput->GetData());
+			//Limiter.ProcessAudio(Inputs.GetData(), Inputs.Num(), Outputs.GetData());
+
+			for (int ChannelIndex = 0; ChannelIndex < NumChannels; ++ChannelIndex)
+			{
+				Limiter.ProcessAudio(Inputs[ChannelIndex]->GetData(), Inputs[ChannelIndex]->Num(), Outputs[ChannelIndex]->GetData());
+			}
+			//
 		}
 
 	private:
@@ -378,7 +379,7 @@ namespace Metasound
 		FFloatReadRef InOutputCeilingDb;
 		FFloatReadRef ThresholdDbInput;
 		FTimeReadRef ReleaseTimeInput;
-		FKneeModeReadRef KneeModeInput;
+		FMaximizerKneeModeReadRef KneeModeInput;
 
 		//Add multichannel support
 
@@ -395,21 +396,6 @@ namespace Metasound
 		double PrevReleaseTime;
 		EMaximizerKneeMode PrevKneeMode;
 	};
-
-	//// Node Class
-	//class FMaximizerNode : public FNodeFacade
-	//{
-	//public:
-	//	FMaximizerNode(const FNodeInitData& InitData)
-	//		: FNodeFacade(InitData.InstanceName, InitData.InstanceID, TFacadeOperatorClass<TMaximizerOperator<2>>())
-	//	{
-	//	}
-	//};
-
-	//// Register node
-	//METASOUND_REGISTER_NODE(FMaximizerNode)
-
-
 
 
 		template<uint32 NumChannels>
