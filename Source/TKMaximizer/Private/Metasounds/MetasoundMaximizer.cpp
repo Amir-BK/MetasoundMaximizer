@@ -12,6 +12,8 @@
 #include "MetasoundParamHelper.h"
 #include "DSP/Dsp.h"
 #include "DSP/DynamicsProcessor.h"
+
+#include "SignalProcessing/EnhancedDynamics.h"
 #include "MetasoundNodeRegistrationMacro.h"
 #include "MetasoundFacade.h"
 #include "MetasoundPrimitives.h"
@@ -62,7 +64,7 @@ namespace Metasound
 			const FTimeReadRef& InReleaseTime,
 			const FKneeModeReadRef& InKneeMode)
 			: Inputs(InInputBuffers)
-			, InGainDbInput(InGainDb)
+			, InOutputCeilingDb(InGainDb)
 			, ThresholdDbInput(InThresholdDb)
 			, ReleaseTimeInput(InReleaseTime)
 			, KneeModeInput(InKneeMode)
@@ -157,20 +159,6 @@ namespace Metasound
 		}; 
 
 
-
-			//static const FVertexInterface Interface(
-			//	FInputVertexInterface(
-			//		//TInputDataVertex<FAudioBuffer>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputAudio)),
-			//		TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(OutputCeilingDb), 0.0f),
-			//		TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputThresholdDb), 0.0f),
-			//		TInputDataVertex<FTime>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputReleaseTime), 0.1f),
-			//		TInputDataVertex<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard)
-			//	),
-			//	(
-			//	FOutputVertexInterface()
-			//	//	TOutputDataVertex<FAudioBuffer>(METASOUND_GET_PARAM_NAME_AND_METADATA(OutputAudio))
-			//	)
-
 	
 
 		virtual void BindInputs(FInputVertexInterfaceData& InOutVertexData) override
@@ -178,7 +166,7 @@ namespace Metasound
 			using namespace MaximizerVertexNames;
 
 			//InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(InputAudio), AudioInput);
-			InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(OutputCeilingDb), InGainDbInput);
+			InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(OutputCeilingDb), InOutputCeilingDb);
 			InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(InputThresholdDb), ThresholdDbInput);
 			InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(InputReleaseTime), ReleaseTimeInput);
 			InOutVertexData.BindReadVertex(METASOUND_GET_PARAM_NAME(InputKneeMode), KneeModeInput);
@@ -241,7 +229,7 @@ namespace Metasound
 		{
 			//AudioOutput->Zero();
 
-			const float ClampedInGainDb = FMath::Min(*InGainDbInput, MaxInputGain);
+			const float ClampedInGainDb = FMath::Min(*InOutputCeilingDb, MaxInputGain);
 			const float ClampedReleaseTime = FMath::Max(FTime::ToMilliseconds(*ReleaseTimeInput), 0.0);
 
 			Limiter.Init(InParams.OperatorSettings.GetSampleRate(), 1);
@@ -272,7 +260,7 @@ namespace Metasound
 		void Execute()
 		{
 			/* Update parameters */
-			float ClampedInGainDb = FMath::Min(*InGainDbInput, MaxInputGain);
+			float ClampedInGainDb = FMath::Min(*InOutputCeilingDb, MaxInputGain);
 			if (!FMath::IsNearlyEqual(ClampedInGainDb, PrevInGainDb))
 			{
 				Limiter.SetInputGain(ClampedInGainDb);
@@ -387,7 +375,7 @@ namespace Metasound
 		static inline const TArray<FVertexName> AudioOutputNames = InitializeAudioOutputNames();
 
 
-		FFloatReadRef InGainDbInput;
+		FFloatReadRef InOutputCeilingDb;
 		FFloatReadRef ThresholdDbInput;
 		FTimeReadRef ReleaseTimeInput;
 		FKneeModeReadRef KneeModeInput;
@@ -399,7 +387,7 @@ namespace Metasound
 
 		
 		// Internal DSP Limiter
-		Audio::FDynamicsProcessor Limiter;
+		FEnhancedDynamicsProcessor Limiter;
 
 		// Cached variables
 		float PrevInGainDb;
@@ -449,7 +437,7 @@ namespace Metasound
 	//	REGISTER_AUDIOMAXIMIZER_NODE(1)
 		//REGISTER_AUDIOMAXIMIZER_NODE(2)
 		
-		REGISTER_AUDIOMAXIMIZER_NODE(4)
+		REGISTER_AUDIOMAXIMIZER_NODE(2)
 	//REGISTER_AUDIOMAXIMIZER_NODE(6)
 		//REGISTER_AUDIOMAXIMIZER_NODE(8)
 }
