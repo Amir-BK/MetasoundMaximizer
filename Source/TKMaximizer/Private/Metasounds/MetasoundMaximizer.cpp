@@ -20,7 +20,6 @@
 
 namespace Metasound
 {
-	/* Mid-Side Encoder */
 	namespace MaximizerVertexNames
 	{
 		METASOUND_PARAM(InputAudio, "Audio", "Incoming audio signal to compress.");
@@ -29,7 +28,7 @@ namespace Metasound
 		METASOUND_PARAM(InputReleaseTime, "Release Time", "How long it takes for audio below the threshold to return to its original volume level.");
 		METASOUND_PARAM(InputKneeMode, "Knee", "Whether the limiter uses a hard or soft knee.");
 
-		METASOUND_PARAM(OutputAudio, "Audio", "The output audio signal.");
+		
 	}
 
 	enum class EMaximizerKneeMode
@@ -39,9 +38,9 @@ namespace Metasound
 	};
 
 	DECLARE_METASOUND_ENUM(EMaximizerKneeMode, EMaximizerKneeMode::Hard, TKMAXIMIZER_API,
-	FEnumKneeMode, FEnumKneeModeInfo, FKneeModeReadRef, FEnumKneeModeWriteRef);
+	FEnumMaximizerKneeMode, FEnumMaximizerKneeModeInfo, FKneeModeReadRef, FEnumMaximizerKneeModeWriteRef);
 
-	DEFINE_METASOUND_ENUM_BEGIN(EMaximizerKneeMode, FEnumKneeMode, "KneeMode")
+	DEFINE_METASOUND_ENUM_BEGIN(EMaximizerKneeMode, FEnumMaximizerKneeMode, "KneeMode")
 		DEFINE_METASOUND_ENUM_ENTRY(EMaximizerKneeMode::Hard, "KneeModeHardDescription", "Hard", "KneeModeHardDescriptionTT", "Only audio strictly above the threshold is affected by the limiter."),
 		DEFINE_METASOUND_ENUM_ENTRY(EMaximizerKneeMode::Soft, "KneeModeSoftDescription", "Soft", "KneeModeSoftDescriptionTT", "Limiter activates more smoothly near the threshold."),
 		DEFINE_METASOUND_ENUM_END()
@@ -122,6 +121,8 @@ namespace Metasound
 
 					InputInterface.Add(TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(OutputCeilingDb), 0.0f));
 					InputInterface.Add(TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputThresholdDb), 0.0f));
+					InputInterface.Add(TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputReleaseTime), 0.1f));
+					InputInterface.Add(TInputDataVertex<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard));
 
 
 					// audio inputs inputs
@@ -134,7 +135,7 @@ namespace Metasound
 			
 //		,
 //		TInputDataVertex<FTime>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputReleaseTime), 0.1f),
-//		TInputDataVertex<FEnumKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard)
+//		TInputDataVertex<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard)
 
 					// outputs
 					FOutputVertexInterface OutputInterface;
@@ -163,7 +164,7 @@ namespace Metasound
 			//		TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(OutputCeilingDb), 0.0f),
 			//		TInputDataVertex<float>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputThresholdDb), 0.0f),
 			//		TInputDataVertex<FTime>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputReleaseTime), 0.1f),
-			//		TInputDataVertex<FEnumKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard)
+			//		TInputDataVertex<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard)
 			//	),
 			//	(
 			//	FOutputVertexInterface()
@@ -231,7 +232,7 @@ namespace Metasound
 			FFloatReadRef InGainDbIn = InputData.GetOrCreateDefaultDataReadReference<float>(METASOUND_GET_PARAM_NAME(OutputCeilingDb), InParams.OperatorSettings);
 			FFloatReadRef ThresholdDbIn = InputData.GetOrCreateDefaultDataReadReference<float>(METASOUND_GET_PARAM_NAME(InputThresholdDb), InParams.OperatorSettings);
 			FTimeReadRef ReleaseTimeIn = InputData.GetOrCreateDefaultDataReadReference<FTime>(METASOUND_GET_PARAM_NAME(InputReleaseTime), InParams.OperatorSettings);
-			FKneeModeReadRef KneeModeIn = InputData.GetOrCreateDefaultDataReadReference<FEnumKneeMode>(METASOUND_GET_PARAM_NAME(InputKneeMode), InParams.OperatorSettings);
+			FKneeModeReadRef KneeModeIn = InputData.GetOrCreateDefaultDataReadReference<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME(InputKneeMode), InParams.OperatorSettings);
 
 			return MakeUnique<TMaximizerOperator<NumChannels>>(InParams, MoveTemp(InputBuffers), InGainDbIn, ThresholdDbIn, ReleaseTimeIn, KneeModeIn);
 		}
