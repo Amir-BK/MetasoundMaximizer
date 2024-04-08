@@ -63,8 +63,8 @@ namespace Metasound
 			const FFloatReadRef& InThresholdDb,
 			const FTimeReadRef& InReleaseTime,
 			const FMaximizerKneeModeReadRef& InKneeMode)
-			: Inputs(InInputBuffers)
-			, InInputGainDb(InGainDb)
+			: InInputGainDb(InGainDb)
+			, Inputs(InInputBuffers)
 			, ThresholdDbInput(InThresholdDb)
 			, ReleaseTimeInput(InReleaseTime)
 			, KneeModeInput(InKneeMode)
@@ -82,31 +82,65 @@ namespace Metasound
 			Reset(InParams);
 		}
 
+		static FNodeClassMetadata CreateNodeClassMetadata(const FName& InOperatorName, const FText& InDisplayName, const FText& InDescription, const FVertexInterface& InDefaultInterface)
+		{
+			FNodeClassMetadata Metadata
+			{
+				FNodeClassName { "AudioMaximizer", InOperatorName, FName() },
+				0, // Major Version
+				2, // Minor Version
+				InDisplayName,
+				InDescription,
+				TEXT("Neurovision & Amir Ben-Kiki"),
+				PluginNodeMissingPrompt,
+				InDefaultInterface,
+				{ NodeCategories::Mix },
+				{ INVTEXT("Dynamics")},
+				FNodeDisplayStyle{}
+			};
+
+			return Metadata;
+		}
+
 		static const FNodeClassMetadata& GetNodeInfo()
 		{
-			auto CreateNodeClassMetadata = []() -> FNodeClassMetadata
+			// used if NumChannels == 1
+			auto CreateNodeClassMetadataMono = []() -> FNodeClassMetadata
 				{
+					FName OperatorName = *FString::Printf(TEXT("Audio Maximizer (Mono)"));
+					FText NodeDisplayName = INVTEXT("Mono Maximizer");
+					const FText NodeDescription = INVTEXT("Limits a signal and boosts it");
 					FVertexInterface NodeInterface = DeclareVertexInterface();
 
-					FNodeClassMetadata Metadata
-					{
-						FNodeClassName{TEXT("MaximizerNode"), TEXT("Maximizer"), TEXT("")},
-						0, // Major Version
-						1, // Minor Version
-						INVTEXT("Maximizer"),
-						INVTEXT("Maximizes a signal while limiting its output"),
-						TEXT("NeuroVision & Amir Ben-Kiki"),
-						PluginNodeMissingPrompt,
-						NodeInterface,
-						{NodeCategories::Dynamics},
-						{},
-						FNodeDisplayStyle{}
-					};
-
-					return Metadata;
+					return CreateNodeClassMetadata(OperatorName, NodeDisplayName, NodeDescription, NodeInterface);
 				};
 
-			static const FNodeClassMetadata Metadata = CreateNodeClassMetadata();
+			// used if NumChannels == 2
+			auto CreateNodeClassMetadataStereo = []() -> FNodeClassMetadata
+				{
+					FName OperatorName = *FString::Printf(TEXT("Audio Maximizer (Stereo)"));
+					FText NodeDisplayName = INVTEXT("Stereo Maximizer");
+					const FText NodeDescription = INVTEXT("Limits a signal and boosts it");
+					FVertexInterface NodeInterface = DeclareVertexInterface();
+
+					return  CreateNodeClassMetadata(OperatorName, NodeDisplayName, NodeDescription, NodeInterface);
+				};
+
+			// used if NumChannels > 2
+			auto CreateNodeClassMetadataMultiChan = []() -> FNodeClassMetadata
+				{
+					FName OperatorName = *FString::Printf(TEXT("Audio Maximizer (%d-Channel"), NumChannels);
+					FText NodeDisplayName = FText::FromString(FString::Printf(TEXT("Audio Maximizer (%d-Channel)"), NumChannels));
+					const FText NodeDescription = INVTEXT("Limits a signal and boosts it");
+					FVertexInterface NodeInterface = DeclareVertexInterface();
+
+					return  CreateNodeClassMetadata(OperatorName, NodeDisplayName, NodeDescription, NodeInterface);
+				};
+
+			static const FNodeClassMetadata Metadata = (NumChannels == 1) ? CreateNodeClassMetadataMono()
+				: (NumChannels == 2) ? CreateNodeClassMetadataStereo() : CreateNodeClassMetadataMultiChan();
+
+			
 			return Metadata;
 		}
 
@@ -134,10 +168,6 @@ namespace Metasound
 						InputInterface.Add(TInputDataVertex<FAudioBuffer>(GetAudioInputName(ChanIndex), AudioInputMetadata));
 					}
 
-			
-//		,
-//		TInputDataVertex<FTime>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputReleaseTime), 0.1f),
-//		TInputDataVertex<FEnumMaximizerKneeMode>(METASOUND_GET_PARAM_NAME_AND_METADATA(InputKneeMode), (int32)EMaximizerKneeMode::Hard)
 
 					// outputs
 					FOutputVertexInterface OutputInterface;
@@ -224,12 +254,14 @@ namespace Metasound
 
 			Limiter.Init(InParams.OperatorSettings.GetSampleRate(), NumChannels);
 			Limiter.SetProcessingMode(Audio::EDynamicsProcessingMode::Limiter);
-			//Limiter.SetLookaheadMsec(1.0f);
-			Limiter.SetInputGain(*ThresholdDbInput * -1.0f);
+			Limiter.SetChannelLinkMode(Audio::EDynamicsProcessorChannelLinkMode::Peak);
+			//Limiter.SetLookaheadMsec(10.0f);
+			Limiter.SetInputGain(0.0f);
 			Limiter.SetThreshold(*ThresholdDbInput);
 			Limiter.SetAttackTime(0.0f);
 			Limiter.SetReleaseTime(ClampedReleaseTime);
 			Limiter.SetPeakMode(Audio::EPeakMode::Peak);
+			//Limiter.SetAnalogMode(true);
 
 			switch (*KneeModeInput)
 			{
@@ -253,7 +285,7 @@ namespace Metasound
 			
 			
 			/* Update parameters */
-			float ClampedInGainDb = *ThresholdDbInput * -1.0f;
+			float ClampedInGainDb = 0.0f;
 			
 			if (!FMath::IsNearlyEqual(ClampedInGainDb, PrevInGainDb))
 			{
@@ -294,7 +326,7 @@ namespace Metasound
 			{
 				Limiter.ProcessAudio(Inputs[ChannelIndex]->GetData(), Inputs[ChannelIndex]->Num(), Outputs[ChannelIndex]->GetData());
 			}
-			Limiter.SetOutputGain(*ThresholdDbInput * -1.0f);
+			Limiter.SetInputGain(*ThresholdDbInput * -1.0f);
 			//
 		}
 
@@ -419,12 +451,11 @@ namespace Metasound
 
 
 		// stereo
-	//	REGISTER_AUDIOMAXIMIZER_NODE(1)
-		//REGISTER_AUDIOMAXIMIZER_NODE(2)
-		
-		REGISTER_AUDIOMAXIMIZER_NODE(2)
-	//REGISTER_AUDIOMAXIMIZER_NODE(6)
-		//REGISTER_AUDIOMAXIMIZER_NODE(8)
+	REGISTER_AUDIOMAXIMIZER_NODE(1)
+	REGISTER_AUDIOMAXIMIZER_NODE(2)
+	REGISTER_AUDIOMAXIMIZER_NODE(4)
+	REGISTER_AUDIOMAXIMIZER_NODE(6)
+	REGISTER_AUDIOMAXIMIZER_NODE(8)
 }
 
 #undef LOCTEXT_NAMESPACE
