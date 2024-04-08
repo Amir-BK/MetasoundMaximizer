@@ -252,7 +252,15 @@ namespace Metasound
 			const float ClampedInGainDb = FMath::Min(*InInputGainDb, MaxInputGain);
 			const float ClampedReleaseTime = FMath::Max(FTime::ToMilliseconds(*ReleaseTimeInput), 0.0);
 
-			Limiter.Init(InParams.OperatorSettings.GetSampleRate(), NumChannels);
+			if (NumChannels == 2)
+			{
+				Limiter.Init(InParams.OperatorSettings.GetSampleRate(), 4);
+			}
+			else
+			{
+				Limiter.Init(InParams.OperatorSettings.GetSampleRate(), NumChannels);
+			}
+
 			Limiter.SetProcessingMode(Audio::EDynamicsProcessingMode::Limiter);
 			Limiter.SetChannelLinkMode(Audio::EDynamicsProcessorChannelLinkMode::Peak);
 			//Limiter.SetLookaheadMsec(10.0f);
@@ -326,7 +334,7 @@ namespace Metasound
 			{
 				Limiter.ProcessAudio(Inputs[ChannelIndex]->GetData(), Inputs[ChannelIndex]->Num(), Outputs[ChannelIndex]->GetData());
 			}
-			Limiter.SetInputGain(*ThresholdDbInput * -1.0f);
+			Limiter.SetOutputGain(*ThresholdDbInput * -1.0f);
 			//
 		}
 
