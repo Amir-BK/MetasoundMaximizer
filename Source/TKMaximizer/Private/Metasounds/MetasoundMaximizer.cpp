@@ -13,6 +13,8 @@
 #include "DSP/Dsp.h"
 #include "DSP/DynamicsProcessor.h"
 
+#include "DSP/MultichannelBuffer.h"
+#include "SampleBuffer.h"
 #include "SignalProcessing/EnhancedDynamics.h"
 #include "MetasoundNodeRegistrationMacro.h"
 #include "MetasoundFacade.h"
@@ -63,11 +65,11 @@ namespace Metasound
 			const FFloatReadRef& InThresholdDb,
 			const FTimeReadRef& InReleaseTime,
 			const FMaximizerKneeModeReadRef& InKneeMode)
-			: InInputGainDb(InGainDb)
-			, Inputs(InInputBuffers)
+			: Inputs(InInputBuffers)
 			, ThresholdDbInput(InThresholdDb)
 			, ReleaseTimeInput(InReleaseTime)
 			, KneeModeInput(InKneeMode)
+			, InInputGainDb(InGainDb)
 			, Limiter()
 			, PrevInGainDb(*InGainDb)
 			, PrevThresholdDb(*InThresholdDb)
@@ -76,8 +78,16 @@ namespace Metasound
 			// create write refs
 			for (uint32 i = 0; i < NumChannels; ++i)
 			{
-				Outputs.Add(FAudioBufferWriteRef::CreateNew(InParams.OperatorSettings));
+				auto AudioBuffer = FAudioBufferWriteRef::CreateNew(InParams.OperatorSettings);
+				
+				Outputs.Add(AudioBuffer);
+
+				OutputAudioView.Emplace(AudioBuffer->GetData(), AudioBuffer->Num());
+
 			}
+
+			//populate input view
+			InputAudioView.Emplace(InInputBuffers.GetData());
 
 			Reset(InParams);
 		}
@@ -232,7 +242,9 @@ namespace Metasound
 
 			for (uint32 Chan = 0; Chan < NumChannels; ++Chan)
 			{
-				InputBuffers.Add(InputData.GetOrConstructDataReadReference<FAudioBuffer>(GetAudioInputName(Chan), InParams.OperatorSettings));
+				auto InputAudioBuffer = InputData.GetOrConstructDataReadReference<FAudioBuffer>(GetAudioInputName(Chan), InParams.OperatorSettings);
+				InputBuffers.Add(InputAudioBuffer);
+				
 			}
 					
 			//const FInputVertexInterfaceData& InputData = InParams.InputData;
@@ -254,7 +266,7 @@ namespace Metasound
 
 			if (NumChannels == 2)
 			{
-				Limiter.Init(InParams.OperatorSettings.GetSampleRate(), 4);
+				Limiter.Init(InParams.OperatorSettings.GetSampleRate(), 2);
 			}
 			else
 			{
@@ -329,11 +341,14 @@ namespace Metasound
 				PrevKneeMode = *KneeModeInput;
 			}
 
-			
-			for (int ChannelIndex = 0; ChannelIndex < NumChannels; ++ChannelIndex)
-			{
-				Limiter.ProcessAudio(Inputs[ChannelIndex]->GetData(), Inputs[ChannelIndex]->Num(), Outputs[ChannelIndex]->GetData());
-			}
+			//OperatorSettings.
+			//InBuffer.GetData(), InData.NumChannels* InData.NumFrames, OutBuffer.GetData()
+			Limiter.ProcessAudio(InputAudioView.GetData()->GetData(), InputAudioView.Num() * NumChannels, OutputAudioView.GetData()->GetData());
+
+			//for (int ChannelIndex = 0; ChannelIndex < NumChannels; ++ChannelIndex)
+			//{
+			//Limiter.ProcessAudio(Inputs[ChannelIndex]->GetData(), Inputs[ChannelIndex]->Num(), Outputs[ChannelIndex]->GetData());
+			//}
 			Limiter.SetOutputGain(*ThresholdDbInput * -1.0f);
 			//
 		}
@@ -425,6 +440,9 @@ namespace Metasound
 		TArray<FAudioBufferReadRef> Inputs;
 		TArray<FAudioBufferWriteRef> Outputs;
 
+		//Multichannel view
+		Audio::FMultichannelBufferView OutputAudioView;
+		Audio::FMultichannelBufferView InputAudioView;
 		
 		// Internal DSP Limiter
 		FEnhancedDynamicsProcessor Limiter;
