@@ -67,11 +67,11 @@ namespace Metasound
             , ThresholdDbInput(InThresholdDb)
 			, ReleaseTimeInput(InReleaseTime)
 			, KneeModeInput(InKneeMode)
-            , Limiter()
-            , PrevInGainDb(*InGainDb)
-            , PrevThresholdDb(*InThresholdDb)
-            , PrevReleaseTime(FMath::Max(FTime::ToMilliseconds(*InReleaseTime), 0.0))
             , Inputs(InInputBuffers)
+			, Limiter()
+			, PrevInGainDb(*InGainDb)
+			, PrevThresholdDb(*InThresholdDb)
+			, PrevReleaseTime(FMath::Max(FTime::ToMilliseconds(*InReleaseTime), 0.0))
 		{
 			// create write refs
 			for (uint32 i = 0; i < NumChannels; ++i)
