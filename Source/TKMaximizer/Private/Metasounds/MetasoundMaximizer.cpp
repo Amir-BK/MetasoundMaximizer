@@ -54,40 +54,84 @@ namespace Metasound
 	class TMaximizerOperator : public TExecutableOperator<TMaximizerOperator<NumChannels>>
 	{
 	public:
-
+        
 		static constexpr float HardKneeBandwitdh = 0.0f;
 		static constexpr float SoftKneeBandwitdh = 10.0f;
 		static constexpr float MaxInputGain = 100.0f;
+    protected:
+        FFloatReadRef InInputGainDb;
+        FFloatReadRef ThresholdDbInput;
+        FTimeReadRef ReleaseTimeInput;
+        FMaximizerKneeModeReadRef KneeModeInput;
 
+        //Add multichannel support
+
+        FAudioBufferReadRefArray Inputs;
+        
+
+        // Cached variables
+        float PrevInGainDb;
+        float PrevThresholdDb;
+        double PrevReleaseTime;
+        EMaximizerKneeMode PrevKneeMode;
+        
+        TArray<FAudioBufferWriteRef> Outputs;
+
+        //Multichannel view
+        Audio::FMultichannelBufferView OutputAudioView;
+        //Audio::FMultichannelBufferView InputAudioView;
+        // Internal DSP Limiter
+        FEnhancedDynamicsProcessor Limiter;
+
+    public:
 		TMaximizerOperator(const FBuildOperatorParams& InParams,
 			const TArray<FAudioBufferReadRef>&& InInputBuffers,
 			const FFloatReadRef& InGainDb,
 			const FFloatReadRef& InThresholdDb,
 			const FTimeReadRef& InReleaseTime,
 			const FMaximizerKneeModeReadRef& InKneeMode)
-			: Inputs(InInputBuffers)
+            : InInputGainDb(InGainDb)
 			, ThresholdDbInput(InThresholdDb)
 			, ReleaseTimeInput(InReleaseTime)
 			, KneeModeInput(InKneeMode)
-			, InInputGainDb(InGainDb)
-			, Limiter()
-			, PrevInGainDb(*InGainDb)
+            , Inputs(InInputBuffers)
+            , PrevInGainDb(*InGainDb)
+
 			, PrevThresholdDb(*InThresholdDb)
 			, PrevReleaseTime(FMath::Max(FTime::ToMilliseconds(*InReleaseTime), 0.0))
+            , Limiter()
 		{
+            
+            //TArray<TArrayView<const float>> ChannelViews;
+
+            const FAudioBufferReadRef& LeftChannel = Inputs[0];
+
 			// create write refs
 			for (uint32 i = 0; i < NumChannels; ++i)
 			{
+                const float* Data = Inputs[i]->GetData();
+                int32 NumSamples = Inputs[i]->Num();
+
+                //auto inputAudioBuffer = FAudioBufferReadRef::CreateNew(InParams.OperatorSettings);
+                //InputAudioView.Add(inputAudioBuffer);
+               
+                //InputAudioView.Emplace(inputAudioBuffer->GetData(), inputAudioBuffer->Num());
+
+                
 				auto AudioBuffer = FAudioBufferWriteRef::CreateNew(InParams.OperatorSettings);
-				
 				Outputs.Add(AudioBuffer);
 
 				OutputAudioView.Emplace(AudioBuffer->GetData(), AudioBuffer->Num());
 
 			}
+            
+            //Audio::FMultichannelBufferView MultichannelView(ChannelViews);
+
+            
+            
 
 			//populate input view
-			InputAudioView.Emplace(InInputBuffers.GetData());
+			//InputAudioView.Emplace(InInputBuffers[0]->GetData());
 
 			Reset(InParams);
 		}
@@ -276,7 +320,7 @@ namespace Metasound
 			Limiter.SetProcessingMode(Audio::EDynamicsProcessingMode::Limiter);
 			Limiter.SetChannelLinkMode(Audio::EDynamicsProcessorChannelLinkMode::Peak);
 			//Limiter.SetLookaheadMsec(10.0f);
-			Limiter.SetInputGain(0.0f);
+            Limiter.SetInputGain(*InInputGainDb);
 			Limiter.SetThreshold(*ThresholdDbInput);
 			Limiter.SetAttackTime(0.0f);
 			Limiter.SetReleaseTime(ClampedReleaseTime);
@@ -305,13 +349,7 @@ namespace Metasound
 			
 			
 			/* Update parameters */
-			float ClampedInGainDb = 0.0f;
-			
-			if (!FMath::IsNearlyEqual(ClampedInGainDb, PrevInGainDb))
-			{
-				Limiter.SetInputGain(ClampedInGainDb);
-				PrevInGainDb = ClampedInGainDb;
-			}
+            Limiter.SetInputGain(*InInputGainDb);
 
 			if (!FMath::IsNearlyEqual(*ThresholdDbInput, PrevThresholdDb))
 			{
@@ -341,15 +379,17 @@ namespace Metasound
 				PrevKneeMode = *KneeModeInput;
 			}
 
-			//OperatorSettings.
-			//InBuffer.GetData(), InData.NumChannels* InData.NumFrames, OutBuffer.GetData()
-			Limiter.ProcessAudio(InputAudioView.GetData()->GetData(), InputAudioView.Num() * NumChannels, OutputAudioView.GetData()->GetData());
+            
+                        
+			Limiter.ProcessAudio(Inputs, Outputs);
+			
+            //
 
 			//for (int ChannelIndex = 0; ChannelIndex < NumChannels; ++ChannelIndex)
 			//{
 			//Limiter.ProcessAudio(Inputs[ChannelIndex]->GetData(), Inputs[ChannelIndex]->Num(), Outputs[ChannelIndex]->GetData());
 			//}
-			Limiter.SetOutputGain(*ThresholdDbInput * -1.0f);
+			//Limiter.SetOutputGain(*ThresholdDbInput * -1.0f);
 			//
 		}
 
@@ -430,28 +470,7 @@ namespace Metasound
 		static inline const TArray<FVertexName> AudioOutputNames = InitializeAudioOutputNames();
 
 
-		FFloatReadRef InInputGainDb;
-		FFloatReadRef ThresholdDbInput;
-		FTimeReadRef ReleaseTimeInput;
-		FMaximizerKneeModeReadRef KneeModeInput;
 
-		//Add multichannel support
-
-		TArray<FAudioBufferReadRef> Inputs;
-		TArray<FAudioBufferWriteRef> Outputs;
-
-		//Multichannel view
-		Audio::FMultichannelBufferView OutputAudioView;
-		Audio::FMultichannelBufferView InputAudioView;
-		
-		// Internal DSP Limiter
-		FEnhancedDynamicsProcessor Limiter;
-
-		// Cached variables
-		float PrevInGainDb;
-		float PrevThresholdDb;
-		double PrevReleaseTime;
-		EMaximizerKneeMode PrevKneeMode;
 	};
 
 
