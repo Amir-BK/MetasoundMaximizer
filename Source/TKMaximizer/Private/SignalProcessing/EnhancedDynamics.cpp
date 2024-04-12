@@ -27,14 +27,14 @@ void FEnhancedDynamicsProcessor::ProcessAudio(const FAudioBufferReadRefArray &In
         } else {
             env_state = env_state * release + (1-release) * max_abs;
         }
-        const float curve_value = 4;
+        const float curve_value = InputGain;
         const float max_curve_value = atanf(curve_value + 0.01f);  // The maximum value possible for input values 0..1.
         float env_after_fitting_curve = atanf(curve_value * env_state + 0.01f); // This also should be a parameter.
         //Normlize to 0..1
         env_after_fitting_curve /= max_curve_value;
         
         //Use Input gain as linear factor from linear to curve
-        env_after_fitting_curve = InputGain * env_after_fitting_curve + (1.0f - InputGain) * 1.0;
+        //env_after_fitting_curve = InputGain * env_after_fitting_curve + (1.0f - InputGain) * 1.0;
         //Smooth running gain
         if (env_after_fitting_curve<running_gain_state) {
             //Want to lower the gain?
@@ -52,26 +52,3 @@ void FEnhancedDynamicsProcessor::ProcessAudio(const FAudioBufferReadRefArray &In
     }
     
 }
-
-void FEnhancedDynamicsProcessor::ProcessAudioFrame(const float* InFrame, float* OutFrame, const float* InKeyFrame)
-    {
-        const bool bKeyIsInput = InFrame == InKeyFrame;
-        if (ProcessKeyFrame(InKeyFrame, OutFrame, bKeyIsInput))
-        {
-            const int32 NumChannels = GetNumChannels();
-            for (int32 Channel = 0; Channel < NumChannels; ++Channel)
-            {
-                // Write and read into the look ahead delay line.
-                // We apply the compression output of the direct input to the output of this delay line
-                // This way sharp transients can be "caught" with the gain.
-                float LookaheadOutput = LookaheadDelay[Channel].ProcessAudioSample(InFrame[Channel]);
-                
-                // Write into the output with the computed gain value
-                OutFrame[Channel] = Gain[Channel] * LookaheadOutput * OutputGain * InputGain;
-            }
-        } else {
-            printf("Error! This should not have happned.");
-        }
-    }
-    
-
